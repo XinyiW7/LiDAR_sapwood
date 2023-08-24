@@ -4,7 +4,7 @@ library(tidyverse)
 library(ggplot2)
 
 ## Data collation
-df <- read.csv("Oak.csv")
+df <- read.csv("Oak_data.csv")
 df <- df %>% 
   mutate(sapwood_depth = sapwood_depth/1000,
          bark = bark/1000,
@@ -26,9 +26,9 @@ df <- df %>%
   )
 
 # Save as CSV
-write.csv(df, "calculated_data.csv", row.names = FALSE)
+write.csv(df, "Oak_data.csv", row.names = FALSE)
 
-df<- read.csv("~/Desktop/calculated_data.csv")
+df<- read.csv("~/Desktop/Oak_data.csv")
 
 #Sapwood area explained by multiple diameters
 # Check outliers
@@ -36,26 +36,29 @@ boxplot(df[,18:23], col = c("grey", "grey", "grey", "grey"),
         xlab = "Groups", ylab = "Diameter (m)")
 
 # Prove that the scan data is valid
-summary(scan_measured_mod)
-RMSE_MS <- sqrt(mean((df$dbh_measured - df$dbh_scan)^2))
-
 scan_measured_mod <- lm(dbh_measured ~ dbh_scan, data = df)
 r_squared <- summary(scan_measured_mod)$r.squared
 coefficients_lm<- coef(scan_measured_mod)
 print(coefficients_lm)
+plot <- df %>%
+  ggplot(aes(dbh_scan,dbh_measured))+
+  geom_point()
+
 plot_with_line <- plot +
   geom_smooth(method = "lm", se = FALSE, color = "black") +  
   annotate("text", x = 0.75 * max(df$dbh_scan), y = 0.95 * max(df$dbh_measured),
            label = paste("R^2 =", round(r_squared, 3)))
-
-# Print the plot
 print(plot_with_line)
+
+summary(scan_measured_mod)
+RMSE_MS <- sqrt(mean((df$dbh_measured - df$dbh_scan)^2))
 
 ## Sapwood area explained by tape measured DBH
 mod1 <- lm(sapwood_area~dbh_measured,data=df)
 summary(mod1)
 coefficients <- coef(mod1)
 print(coefficients)
+
 df %>% 
   ggplot(aes(dbh_measured,sapwood_area))+
   geom_point()+
@@ -110,6 +113,7 @@ sse <- sum((y_predicted - y)^2)
 # R2
 rsq <- 1 - sse / sst
 rsq
+
 # Adjusted R2
 n <- nrow(x)
 p <- ncol(x)
@@ -128,38 +132,38 @@ results_ridge <- train(x = x, y = y, data = df, method = "glmnet", trControl = c
 print(results_lm)
 print(results_ridge)
 
-## Sapwood area predict by tape measurement
-df<- read.csv("~/Desktop/lmtest10.csv")
-modlm10 <- lm(sapwood_area~dbh_measured,data=df)
+## Sapwood area predicted by tape measurement (Repeat to predict different sample size)
+df <- read.csv("~/Desktop/Test_data.csv")
+modlm10 <- lm(sapwood_area_10~dbh_measured_10,data=df)
 summary(modlm10)
-df %>% 
-  ggplot(aes(dbh_measured,sapwood_area))+
-  geom_point()
 
 # Test model
 save(modlm10, file = "modlm10.RData")
 load("modlm10.RData")
 
-df5<- read.csv("~/Desktop/lmpre10.csv")
-new_data <- data.frame(dbh_measured = df5$dbh_measured)
+df <- read.csv("~/Desktop/Predict_data.csv")
+new_data <- data.frame(dbh_measured_10 = df$dbh_measured_10)
 
 # Predict
-predictions <- predict(modlm10, newdata = new_data)
-print(predictions)
-write.csv(predictions, "lmpre10r.csv", row.names = FALSE)
+lmpredict_sapwood_area_10 <- data.frame(predict(modlm10, newdata = new_data))
+print(lmpredict_sapwood_area_10)
+
+combined_data <- data.frame(
+  lmpredict_sapwood_area_10 = lmpredict_sapwood_area_10,
+  lmpredict_sapwood_area_20 = lmpredict_sapwood_area_20,
+  lmpredict_sapwood_area_30 = lmpredict_sapwood_area_30
+)
+write.csv(combined_data, "Result_data.csv", row.names = FALSE)
 
 # Compare predict and measure
-df<- read.csv("~/Desktop/lmpre.csv")
-lm_mod10<- lm(measured_sapwood_area10~predict_sapwood_area10,data=df)
+df <- read.csv("~/Desktop/Result_data.csv")
+lm_mod10<- lm(measured_sapwood_area_10~lmpredict_10,data=df)
 summary(lm_mod10)
 
-df %>% 
-  ggplot(aes(predict_sapwood_area10,measured_sapwood_area10))+
-  geom_point()
+# Repeat above to get 3 samples results
 
 ## Sapwood area measurement by LiDAR scanning
-df<- read.csv("~/Desktop/test10.csv")
-library(glmnet)
+df <- read.csv("~/Desktop/rrtest10.csv")
 
 x <- df[, 18:23]
 y <- df$sapwood_area
@@ -205,30 +209,32 @@ save(ridge_model10, file = "ridge_model10.RData")
 # Load the pre-trained Ridge Regression model from ridge_model.RData file
 load("ridge_model10.RData")
 
-new_data <- read.csv("predict10.csv")
-new_x <- as.matrix(new_data[, 18:23])
+new_data <- read.csv("Predict_data.csv")
+new_x <- as.matrix(new_data[, 2:7])
 
 # Predict new y values using the pre-trained Ridge Regression model
-predicted_10 <- predict(ridge_model10, s = best_lambda, newx = new_x)
+rrpredicted_sapwood_area_10 <- predict(ridge_model10, s = best_lambda, newx = new_x)
 
 # Save the predicted values 
-write.csv(predicted_10, "predicted10_values.csv", row.names = FALSE)
+write.csv(rrpredicted_sapwood_area_10, "rrResult.csv", row.names = FALSE)
 
-df2 <- read.csv("~/Desktop/test10_result.csv")
+
+df <- read.csv("~/Desktop/rrResult.csv")
 
 # Compare predict and measure
-mod4 <- lm(measured_sapwood_area~predict_sapwood_area,data=df2)
-summary(mod4)
+rrmod10 <- lm(measured_sapwood_area_10~rrpredict_sapwood_area_10,data=df)
+summary(rrmod10)
 
-df2 %>% 
-  ggplot(aes(predict_sapwood_area,measured_sapwood_area ))+
+df %>% 
+  ggplot(aes(rrpredict_sapwood_area_10,measured_sapwood_area_10 ))+
   geom_point()+
   geom_smooth(method = "lm", se = FALSE, color = "black") +
-  geom_text(aes(x = 0.7 * max(predict_sapwood_area), y = 0.9 * max(measured_sapwood_area), label = paste("R^2 =", round(summary(mod4)$r.squared, 3))))
+  geom_text(aes(x = 0.7 * max(rrpredict_sapwood_area_10), y = 0.9 * max(measured_sapwood_area_10), label = paste("R^2 =", round(summary(rrmod10)$r.squared, 3))))
 
 # Calculate Mean Absolute Error (MAE)
-MAE10 <- mean(abs(df2$predict_sapwood_area - df2$measured_sapwood_area))
+MAE10 <- mean(abs(df4$predict_sapwood_area_10 - df$measured_sapwood_area_10))
 
 # Calculate Root Mean Squared Error (RMSE)
-RMSE10 <- sqrt(mean((df2$predict_sapwood_area - df2$measured_sapwood_area)^2))
+RMSE10 <- sqrt(mean((df4$predict_sapwood_area_10 - df$measured_sapwood_area_10)^2))
 
+# Repeat to get 3 samples results
